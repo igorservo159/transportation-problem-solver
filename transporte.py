@@ -1,11 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def ImprimirTabela(solucoes, nome_arquivo, iteracao, limpar=False):
+inf = 10000000000
+
+def ImprimirTabela(tabela, nome_arquivo, iteracao, limpar=False):
     mode = 'w' if limpar else 'a'
     with open(nome_arquivo, mode) as f:
         f.write(f"Iteração {iteracao}:\n")
-        np.savetxt(f, solucoes, fmt='%2d')
+        np.savetxt(f, tabela, fmt='%2d')
         f.write("\n")
 
 def verificar_coluna(matriz, col):
@@ -132,7 +134,7 @@ def gsi_CM(custos, solucoes, ofertas, demandas, nome_arquivo):
             solucoes[linha, coluna] = ofertas_copia[linha]
             demandas_copia[coluna] -= ofertas_copia[linha]
             ofertas_copia[linha] = 0
-        custos_copia[linha, coluna] = 100000000
+        custos_copia[linha, coluna] = inf
         if not np.array_equal(solucoes, solucoes_anteriores):
             iteracao += 1
             ImprimirTabela(solucoes, nome_arquivo, iteracao, limpar)
