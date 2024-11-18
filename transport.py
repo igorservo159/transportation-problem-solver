@@ -1,272 +1,342 @@
 import numpy as np
 import pandas as pd
+import tkinter as tk
+from tkinter import simpledialog
 
-inf = np.inf
+INF = 1000000000000
 
-def print_txt_table(table, filename, iteration, clean=False, print_output='n'):
-    if print_output == 'y':
-        mode = 'w' if clean else 'a'
-        with open(filename, mode) as f:
-            f.write(f"Iteration {iteration}:\n")
-            np.savetxt(f, table, fmt='%5d')
-            f.write("\n")
+# Save tables to .txt files
+def save_table_to_txt(matrix, filename, iteration, overwrite=False, save_output='n'):
+    if save_output == 'y':
+        mode = 'w' if overwrite else 'a'
+        with open(filename, mode) as file:
+            file.write(f"Iteration {iteration}:\n")
+            np.savetxt(file, matrix, fmt='%7d')
+            file.write("\n")
 
-def print_xlsx_table(table, filename, iteration, clean=False, print_output='n'):
-    if print_output == 'y':
-        df = pd.DataFrame(table)
-        with pd.ExcelWriter(filename, mode='a' if not clean else 'w', engine='openpyxl') as writer:
+# Save tables to .xlsx files
+def save_table_to_xlsx(matrix, filename, iteration, overwrite=False, save_output='n'):
+    if save_output == 'y':
+        df = pd.DataFrame(matrix)
+        with pd.ExcelWriter(filename, mode='a' if not overwrite else 'w', engine='openpyxl') as writer:
             df.to_excel(writer, sheet_name=f"Iteration_{iteration}", index=False, header=False)
 
+# Check if a column in a matrix is canonical
+def is_canonical_column(matrix, col_index):
+    column_values = matrix[:, col_index]
+    return np.sum(column_values == 1) == 1 and np.sum(column_values == 0) == (column_values.size - 1)
 
-def verify_col(matrix, col):
-    col_ = matrix[:, col]
-    
-    single_one = np.sum(col_ == 1) == 1
-    remainder_zeros = np.sum(col_ == 0) == (col_.size - 1)
-    
-    return single_one and remainder_zeros
-
-def turn_into_canonical_shape(solutions, c, A, B, print_output='n'):
-    cost = 0
+# Transform the problem into canonical form
+def convert_to_canonical_form(solution_matrix, cost_vector, constraint_matrix, rhs_vector, save_output='n'):
+    total_cost = 0
     iteration = 0
-    clean = True
-    cs_file = "Canonical_shape.txt"
+    output_file = "Convert_to_Canonical_Form.txt"
 
-    flatten_solutions = solutions.flatten()
-    basic_variables_indexes = np.where(flatten_solutions > 0)[0]
+    solution_vector = solution_matrix.flatten()
+    basic_variable_indices = np.where(solution_vector > 0)[0]
 
-    table = np.hstack((A, B.reshape(-1, 1)))
-    print_txt_table(table, cs_file, iteration, clean, print_output)
+    table = np.hstack((constraint_matrix, rhs_vector.reshape(-1, 1)))
+    save_table_to_txt(table, output_file, iteration, overwrite=True, save_output=save_output)
 
-    available_rows = np.arange(B.size)
-    
-    for i in basic_variables_indexes:
-        if not verify_col(A, i):
-            clean = False
+    available_rows = np.arange(rhs_vector.size)
+
+    for index in basic_variable_indices:
+        if not is_canonical_column(constraint_matrix, index):
             iteration += 1
+            row_indices_with_one = np.where(constraint_matrix[:, index] == 1)[0]
+            valid_rows = np.intersect1d(row_indices_with_one, available_rows)
 
-            eq1_rows_indexes = np.where(A[:, i] == 1)[0]
-            available_eq1_rows = np.intersect1d(eq1_rows_indexes, available_rows)
+            selected_row = valid_rows[np.argmin(rhs_vector[valid_rows])]
+            non_zero_indices = np.nonzero(constraint_matrix[:, index])[0]
 
-            filtered_B = B[available_eq1_rows]
-            j = available_eq1_rows[np.argmin(filtered_B)]
+            rows_to_zero = list(non_zero_indices)
+            rows_to_zero.remove(selected_row)
 
-            non_zero_indexes = np.nonzero(A[:, i])[0]
-            turning_zero_indexes = non_zero_indexes.tolist() 
-            turning_zero_indexes.remove(j)
+            available_rows = available_rows[available_rows != selected_row]
 
-            available_rows = available_rows[available_rows != j]
+            for row in rows_to_zero:
+                factor = constraint_matrix[row, index]
+                constraint_matrix[row, :] -= constraint_matrix[selected_row, :] * factor
+                rhs_vector[row] -= rhs_vector[selected_row] * factor
 
-            for k in turning_zero_indexes:
-                factor = A[k, i]
-                A[k, :] -= A[j, :] * factor
-                B[k] -= B[j] * factor
-            
-            table = np.hstack((A, B.reshape(-1, 1)))
-            print_txt_table(table, cs_file, iteration, clean, print_output)
+            table = np.hstack((constraint_matrix, rhs_vector.reshape(-1, 1)))
+            save_table_to_txt(table, output_file, iteration, overwrite=False, save_output=save_output)
 
-    for i in basic_variables_indexes:
-        if(c[i] != 0):
-            factor = c[i]
-            j = np.argmax(A[:, i])
-            c -= A[j, :]*factor
-            cost -= B[j]*factor
+    for index in basic_variable_indices:
+        if cost_vector[index] != 0:
+            factor = cost_vector[index]
+            selected_row = np.argmax(constraint_matrix[:, index])
+            cost_vector -= constraint_matrix[selected_row, :] * factor
+            total_cost -= rhs_vector[selected_row] * factor
 
-    return cost
+    return total_cost
 
-def prepare_restrictions(costs, supplies, demands):
-    n_source, m_destinations = costs.shape
-    c = costs.flatten()
+# Prepare constraints for the simplex method
+def prepare_constraints(cost_matrix, supply_vector, demand_vector):
+    num_sources, num_destinations = cost_matrix.shape
+    cost_vector = cost_matrix.flatten()
 
-    A = []
-    B = []
+    constraint_matrix = []
+    rhs_vector = []
 
-    #Supply Restrictions
-    for i in range(n_source):
-        restrictions = [0] * (n_source * m_destinations)
-        for j in range(m_destinations):
-            restrictions[i * m_destinations + j] = 1
-        A.append(restrictions)
-        B.append(supplies[i])
+    # Supply constraints
+    for source in range(num_sources):
+        constraint_row = [0] * (num_sources * num_destinations)
+        for destination in range(num_destinations):
+            constraint_row[source * num_destinations + destination] = 1
+        constraint_matrix.append(constraint_row)
+        rhs_vector.append(supply_vector[source])
 
-    #Demand Restrictions
-    for j in range(m_destinations):
-        restrictions = [0] * (n_source * m_destinations)
-        for i in range(n_source):
-            restrictions[i * m_destinations + j] = 1
-        A.append(restrictions)
-        B.append(demands[j])
+    # Demand constraints
+    for destination in range(num_destinations):
+        constraint_row = [0] * (num_sources * num_destinations)
+        for source in range(num_sources):
+            constraint_row[source * num_destinations + destination] = 1
+        constraint_matrix.append(constraint_row)
+        rhs_vector.append(demand_vector[destination])
 
-    A = np.array(A)
-    B = np.array(B)
-    return c, A, B
+    return np.array(cost_vector), np.array(constraint_matrix), np.array(rhs_vector)
 
-def generate_inicial_solution_northwest_rule(solutions, supplies, demands, print_output='n'):
-    nr_file = "Northwest_rule.txt"
-    
-    supplies_copy = supplies.copy()
-    demands_copy = demands.copy()
-    iterations = 0
-    clean = True  
+# Generate an initial solution using the Northwest Corner Rule
+def generate_initial_solution_northwest(solution_matrix, supply_vector, demand_vector, save_output='n'):
+    output_file = "Northwest_rule.txt"
 
-    solutions_with_demands = np.vstack([solutions, demands_copy])
-    solutions_table = np.hstack([solutions_with_demands, np.append(supplies_copy, [0]).reshape(-1, 1)])
+    supply = supply_vector.copy()
+    demand = demand_vector.copy()
+    iteration = 0
 
-    print_txt_table(solutions_table, nr_file, iterations, clean, print_output)
-    clean = False
+    solutions_with_demand = np.vstack([solution_matrix, demand])
+    solution_table = np.hstack([solutions_with_demand, np.append(supply, [0]).reshape(-1, 1)])
 
-    for row in range(supplies.size):
-        for col in range(demands.size):
-            previous_solutions = solutions.copy()
-            if supplies_copy[row] >= demands_copy[col]:
-                solutions[row, col] = demands_copy[col]
-                supplies_copy[row] -= demands_copy[col]
-                demands_copy[col] = 0
+    save_table_to_txt(solution_table, output_file, iteration, overwrite=True, save_output=save_output)
+
+    for source in range(supply.size):
+        for destination in range(demand.size):
+            previous_solution = solution_matrix.copy()
+            if supply[source] >= demand[destination]:
+                solution_matrix[source, destination] = demand[destination]
+                supply[source] -= demand[destination]
+                demand[destination] = 0
             else:
-                solutions[row, col] = supplies_copy[row]
-                demands_copy[col] -= supplies_copy[row]
-                supplies_copy[row] = 0
-            if not np.array_equal(solutions, previous_solutions):
-                iterations += 1
-                print_txt_table(solutions, nr_file, iterations, clean, print_output)
-                clean = False  
-                previous_solutions = solutions.copy()
+                solution_matrix[source, destination] = supply[source]
+                demand[destination] -= supply[source]
+                supply[source] = 0
 
-def generate_inicial_solution_minimal_cost(costs, solutions, supplies, demands, print_output='n'):
-    mcct_file = "Minimal_costs_costs_table.txt"
-    mcst_file = "Minimal_costs_solutions_table.txt"
+            if not np.array_equal(solution_matrix, previous_solution):
+                iteration += 1
+                save_table_to_txt(solution_matrix, output_file, iteration, overwrite=False, save_output=save_output)
+                previous_solution = solution_matrix.copy()
 
-    costs_copy = costs.copy()
-    supplies_copy = supplies.copy()
-    demands_copy = demands.copy()
+# Generate an initial solution using the Minimum Cost Method
+def generate_initial_solution_minimum_cost(cost_matrix, solutions, supply_vector, demand_vector, save_output='n'):
+    costs_output_file = "MC_costs.txt"
+    solutions_output_file = "MC_solutions.txt"
+
+    costs = cost_matrix.copy()
+    supply = supply_vector.copy()
+    demand = demand_vector.copy()
 
     iteration_solutions = 0
     iteration_costs = 0
-    clean = True  
 
-    costs_with_demands = np.vstack([costs_copy, demands_copy])
-    costs_table = np.hstack([costs_with_demands, np.append(supplies_copy, [0]).reshape(-1, 1)])
+    costs_with_demand = np.vstack([costs, demand])
+    cost_table = np.hstack([costs_with_demand, np.append(supply, [0]).reshape(-1, 1)])
 
-    solutions_with_demands = np.vstack([solutions, demands_copy])
-    solutions_table = np.hstack([solutions_with_demands, np.append(supplies_copy, [0]).reshape(-1, 1)])
+    solutions_with_demand = np.vstack([solutions, demand])
+    solution_table = np.hstack([solutions_with_demand, np.append(supply, [0]).reshape(-1, 1)])
 
-    print_txt_table(costs_table, mcct_file, iteration_costs, clean, print_output)
-    print_txt_table(solutions_table, mcst_file, iteration_solutions, clean, print_output)
-    clean = False
- 
-    while np.any(demands_copy > 0) and np.any(supplies_copy > 0):
-        costs_table_copy = costs_table.copy()
-        solutions_table_copy = solutions_table.copy()
+    save_table_to_txt(cost_table, costs_output_file, iteration_costs, overwrite=True, save_output=save_output)
+    save_table_to_txt(solution_table, solutions_output_file, iteration_solutions, overwrite=True, save_output=save_output)
 
-        i_min = np.argmin(costs_copy)
-        pos = np.unravel_index(i_min, costs_copy.shape)
+    while np.any(demand > 0) and np.any(supply > 0):
+        cost_table_copy = cost_table.copy()
+        solution_table_copy = solution_table.copy()
 
-        row, col = pos
-        if supplies_copy[row] >= demands_copy[col]:
-            solutions[row, col] = demands_copy[col]
-            supplies_copy[row] -= demands_copy[col]
-            demands_copy[col] = 0
+        min_index = np.argmin(costs)
+        source, destination = np.unravel_index(min_index, costs.shape)
+
+        if supply[source] >= demand[destination]:
+            solutions[source, destination] = demand[destination]
+            supply[source] -= demand[destination]
+            demand[destination] = 0
         else:
-            solutions[row, col] = supplies_copy[row]
-            demands_copy[col] -= supplies_copy[row]
-            supplies_copy[row] = 0
-        costs_copy[row, col] = inf
+            solutions[source, destination] = supply[source]
+            demand[destination] -= supply[source]
+            supply[source] = 0
+        costs[source, destination] = INF
 
-        costs_with_demands = np.vstack([costs_copy, demands_copy])
-        costs_table = np.hstack([costs_with_demands, np.append(supplies_copy, [0]).reshape(-1, 1)])
+        costs_with_demand = np.vstack([costs, demand])
+        cost_table = np.hstack([costs_with_demand, np.append(supply, [0]).reshape(-1, 1)])
 
-        solutions_with_demands = np.vstack([solutions, demands_copy])
-        solutions_table = np.hstack([solutions_with_demands, np.append(supplies_copy, [0]).reshape(-1, 1)])
-        
-        if not np.array_equal(solutions_table_copy, solutions_table):
+        solutions_with_demand = np.vstack([solutions, demand])
+        solution_table = np.hstack([solutions_with_demand, np.append(supply, [0]).reshape(-1, 1)])
+
+        if not np.array_equal(solution_table_copy, solution_table):
             iteration_solutions += 1
-            print_txt_table(solutions_table, mcst_file, iteration_solutions, clean, print_output)
+            save_table_to_txt(solution_table, solutions_output_file, iteration_solutions, overwrite=False, save_output=save_output)
 
-        if not np.array_equal(costs_table_copy, costs_table):
+        if not np.array_equal(cost_table_copy, cost_table):
             iteration_costs += 1
-            print_txt_table(costs_table, mcct_file, iteration_costs, clean, print_output)
+            save_table_to_txt(cost_table, costs_output_file, iteration_costs, overwrite=False, save_output=save_output)
 
 
-def execute_simplex(cost, c, A, B, print_output='n'):
+# Run the simplex algorithm
+def run_simplex(total_cost, cost_vector, constraint_matrix, rhs_vector, save_output='n'):
     iteration = 0
-    simplex_file = "Simplex.xlsx"
-    #fatores_file = "Fatores.txt"
+    output_file = "simplex.txt"
 
-    c_with_cost = np.append(c, cost)
-    table = np.hstack((A, B.reshape(-1, 1)))
-    table = np.vstack((c_with_cost, table))
-    clean = True
+    cost_vector_with_total_cost = np.append(cost_vector, total_cost)
+    table = np.hstack((constraint_matrix, rhs_vector.reshape(-1, 1)))
+    table = np.vstack((cost_vector_with_total_cost, table))
 
-    print_xlsx_table(table, simplex_file, iteration, clean, print_output)
-    while np.any(c > 0):
+    save_table_to_txt(table, output_file, iteration, overwrite=True, save_output=save_output)
+    while np.any(cost_vector > 0):
         iteration += 1
-        
-        i = np.argmax(c)
-        indexes_vector = np.where(A[:, i] == 1)[0]
-        values_of_b = B[indexes_vector]
-        min_value_index = np.argmin(values_of_b)
-        j = indexes_vector[min_value_index]
 
-        non_null_vector = np.where(A[:, i] != 0)[0]
-        copy = non_null_vector.tolist() 
-        copy.remove(j)
+        entering_variable_index = np.argmax(cost_vector)
+        valid_rows = np.where(constraint_matrix[:, entering_variable_index] == 1)[0]
+        selected_row = valid_rows[np.argmin(rhs_vector[valid_rows])]
 
-        factor = c[i]
-        cost -= factor * B[j]
-        c -= factor * A[j, :]
+        non_zero_indices = np.nonzero(constraint_matrix[:, entering_variable_index])[0]
+        rows_to_zero = non_zero_indices.tolist()
+        rows_to_zero.remove(selected_row)
 
-        cost -= c[i] * B[j]
-        c -= c[i] * A[j, :]
-        for k in copy:
-            factor = A[k, i]
-            A[k, :] -= A[j, :] * factor
-            B[k] -= B[j] * factor
+        factor = cost_vector[entering_variable_index]
+        total_cost -= factor * rhs_vector[selected_row]
+        cost_vector -= factor * constraint_matrix[selected_row, :]
 
-        c_expanded = np.append(c, cost)
-        table = np.hstack((A, B.reshape(-1, 1)))
-        table = np.vstack((c_expanded, table))
-        print_xlsx_table(table, simplex_file, iteration, False, print_output)
-    
-    return cost
+        for row in rows_to_zero:
+            factor = constraint_matrix[row, entering_variable_index]
+            constraint_matrix[row, :] -= constraint_matrix[selected_row, :] * factor
+            rhs_vector[row] -= rhs_vector[selected_row] * factor
 
-def main(costs, demands, supplies, method='northwest', print_output='n'):
-    solutions = np.zeros_like(costs)
+        cost_vector_with_total_cost = np.append(cost_vector, total_cost)
+        table = np.hstack((constraint_matrix, rhs_vector.reshape(-1, 1)))
+        table = np.vstack((cost_vector_with_total_cost, table))
+        save_table_to_txt(table, output_file, iteration, overwrite=False, save_output=save_output)
 
-    if method == 'minimal_cost':
-        generate_inicial_solution_minimal_cost(costs, solutions, supplies, demands, print_output)
+    return total_cost
+
+# Main function
+def main(cost_matrix, demand_vector, supply_vector, method='northwest', save_output='n'):
+    solution_matrix = np.zeros_like(cost_matrix)
+
+    if method == 'minimum_cost':
+        generate_initial_solution_minimum_cost(cost_matrix, solution_matrix, supply_vector, demand_vector, save_output)
     elif method == 'northwest':
-        generate_inicial_solution_northwest_rule(solutions, supplies, demands, print_output)
-    else:
-        raise ValueError("Not recognized method. Use 'minimal_cost' ou 'northwest'.")
+        generate_initial_solution_northwest(solution_matrix, supply_vector, demand_vector, save_output)
 
-    c_, A, B = prepare_restrictions(costs, supplies, demands)
-    c = c_ * -1
+    cost_vector, constraint_matrix, rhs_vector = prepare_constraints(cost_matrix, supply_vector, demand_vector)
+    cost_vector = -cost_vector
 
-    cost = turn_into_canonical_shape(solutions, c, A, B, print_output)
-
-    result = execute_simplex(cost, c, A, B, print_output)
+    total_cost = convert_to_canonical_form(solution_matrix, cost_vector, constraint_matrix, rhs_vector, save_output)
+    result = run_simplex(total_cost, cost_vector, constraint_matrix, rhs_vector, save_output)
 
     print(f"Final result: {result}")
     return result
 
-def run():
-    print("Enter the values for the costs matrix (e.g., '20 15 10; 12 8 16'):")
-    costs_input = input().strip()
-    costs = np.array([list(map(int, row.split())) for row in costs_input.split(';')])
 
-    print("Enter the values for the demands (e.g., '20 40 60'):")
-    demands = np.array(list(map(int, input().strip().split())))
+def launch_gui():
+    root = tk.Tk()
+    root.withdraw()  # Hide the main Tkinter window
 
-    print("Enter the values for the supplies (e.g., '50 70'):")
-    supplies = np.array(list(map(int, input().strip().split())))
+    # Declare variables to hold user choices
+    save_output = None
+    method = None
 
-    print("Do you want to print the output to files? (y/n):")
-    print_output = input().strip().lower()
+    def get_save_output(choice):
+        nonlocal save_output
+        save_output = choice
+        save_output_window.destroy()
 
-    print("Choose the method to generate the initial solution (minimal_cost/northwest):")
-    method = input().strip().lower()
+    def get_method(choice):
+        nonlocal method
+        method = choice
+        method_window.destroy()
 
-    main(costs, demands, supplies, method, print_output)
+    # Ask for the number of demands and supplies
+    try:
+        num_demands = simpledialog.askinteger("Demands", "Enter the number of demands:")
+        if not num_demands or num_demands <= 0:
+            print("Invalid number of demands. Exiting.")
+            return
+
+        num_supplies = simpledialog.askinteger("Supplies", "Enter the number of supplies:")
+        if not num_supplies or num_supplies <= 0:
+            print("Invalid number of supplies. Exiting.")
+            return
+    except ValueError:
+        print("Invalid input for the number of demands or supplies. Exiting.")
+        return
+
+    # Input costs
+    cost_input = simpledialog.askstring("Costs", 
+                                        f"Enter costs matrix ({num_supplies} x {num_demands}) with columns separeted by space and rows by comma:\ne.g., for (2x3): '20 15 10, 12 8 16'")
+    if not cost_input:
+        print("No input provided for costs. Exiting.")
+        return
+    try:
+        cost_matrix = np.array([list(map(int, row.split())) for row in cost_input.split(',')])
+        if cost_matrix.shape != (num_supplies, num_demands):
+            print(f"Invalid shape for costs matrix. Expected ({num_supplies}, {num_demands}). Exiting.")
+            return
+    except ValueError:
+        print("Invalid input for costs. Please provide integers in the correct format.")
+        return
+
+    # Input demands
+    demand_input = simpledialog.askstring("Demands", f"Enter demands vector ({num_demands}) separated by space:\ne.g., '20 40 60'")
+    if not demand_input:
+        print("No input provided for demands. Exiting.")
+        return
+    try:
+        demand_vector = np.array(list(map(int, demand_input.split())))
+        if demand_vector.shape[0] != num_demands:
+            print(f"Invalid number of demands. Expected {num_demands}. Exiting.")
+            return
+    except ValueError:
+        print("Invalid input for demands. Please provide integers in the correct format.")
+        return
+
+    # Input supplies
+    supply_input = simpledialog.askstring("Supplies", f"Enter supplies vector ({num_supplies}) separeted by space:\ne.g., '50 70'")
+    if not supply_input:
+        print("No input provided for supplies. Exiting.")
+        return
+    try:
+        supply_vector = np.array(list(map(int, supply_input.split())))
+        if supply_vector.shape[0] != num_supplies:
+            print(f"Invalid number of supplies. Expected {num_supplies}. Exiting.")
+            return
+    except ValueError:
+        print("Invalid input for supplies. Please provide integers in the correct format.")
+        return
+
+    # Save output selection
+    save_output_window = tk.Toplevel(root)
+    save_output_window.title("Save Output")
+    save_output_window.minsize(300, 100)  # Set minimum width and height
+    tk.Label(save_output_window, text="Save output to files?").pack()
+    tk.Button(save_output_window, text="Yes", command=lambda: get_save_output('y')).pack(side=tk.LEFT)
+    tk.Button(save_output_window, text="No", command=lambda: get_save_output('n')).pack(side=tk.RIGHT)
+    root.wait_window(save_output_window)  # Wait for the user to close the window
+
+    # Method selection
+    method_window = tk.Toplevel(root)
+    method_window.title("Method Selection")
+    method_window.minsize(300, 100)  # Set minimum width and height
+    tk.Label(method_window, text="Choose method:").pack()
+    tk.Button(method_window, text="Minimum Cost", command=lambda: get_method('minimum_cost')).pack(side=tk.LEFT)
+    tk.Button(method_window, text="Northwest", command=lambda: get_method('northwest')).pack(side=tk.RIGHT)
+    root.wait_window(method_window)  # Wait for the user to close the window
+
+    # Validate choices
+    if save_output is None or method is None:
+        print("User did not complete the selection process. Exiting.")
+        return
+
+    # Call the main function
+    main(cost_matrix, demand_vector, supply_vector, method, save_output)
 
 if __name__ == "__main__":
-    run()
+    launch_gui()
