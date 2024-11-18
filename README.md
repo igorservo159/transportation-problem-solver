@@ -88,8 +88,8 @@ The program provides the following outputs:
    - Logs of the intermediate steps during the solution process.
    - Saved in `.txt` or `.xlsx` format, based on user preference.
    - Example file names:
-     - `Minimal_cost_costs_table.txt`
-     - `Minimal_costs_solutions_table.xlsx`
+     - `MC_costs.txt`
+     - `MC_solutions.xlsx`
      - `Northwest_rule.txt`
 
 4. **Console Outputs**:
