@@ -1,98 +1,81 @@
 # Transportation Problem Solver
 
-> ## Federal University of Rio Grande do Norte  
-> ## Technology Center  
-> ### Department of Computer Engineering and Automation  
-> #### Author: **João Igor Ramos de Lima :mortar_board:**
->
-> Python-based solver for the **Transportation Problem**.
->
-> ### Contact
-> [igorservo159@gmail.com](mailto:igorservo159@gmail.com)
->
-> Copyright (c) 2024, João Igor Ramos de Lima.  
-> All rights reserved.   
-> SPDX-License-Identifier: BSD-2-Clause
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-app-name.streamlit.app)
 
-This repository contains a Python-based solver for the **Transportation Problem**, a classic optimization problem in linear programming. The solver supports two initialization methods for finding a basic feasible solution: **Minimum Cost Rule** and **Northwest Rule**. After initialization, the **Simplex Method** is applied to find the optimal solution.
+[![License: BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](https://opensource.org/licenses/BSD-2-Clause)
 
-The solution process also generates detailed logs of the iterations in **.txt** or **.xlxs** formats.
+An interactive web application built with Python and Streamlit to solve the classic **Transportation Problem**. This tool finds the minimum cost for shipping goods from a set of sources to a set of destinations.
+
+The backend is powered by a robust implementation of the **General Simplex algorithm**, ensuring fast and accurate results for standard optimization problems.
 
 ---
 
-## Features
+## Key Features
 
-- **Initialization Methods**:
-  - **Minimum Cost Rule**: Starts with the least-cost allocation.
-  - **Northwest Rule**: Allocates from the top-left corner systematically.
-  
-- **Optimization**:
-  - **Simplex Method**: Applied after initialization to find the optimal solution.
-
-- **Output Options**:
-  - Save iteration tables as **.txt** or **.xlxs** files for review.
+-   **Interactive Web UI**: A clean, modern, and user-friendly web UI built with Streamlit.
+-   **Dual Initial Solution Methods**: Choose between the **Minimum Cost Rule** or the **Northwest Corner Rule** to generate the initial feasible solution.
+-   **Proven Simplex Solver**: Utilizes the robust General Simplex algorithm to find the optimal solution.
+-   **In-App Step Visualization**: See the initial solution and each Simplex iteration displayed directly on the results page for easy analysis.
+-   **Simple Data Input**: Enter data manually via straightforward text fields that are pre-populated with a default example.
 
 ---
+
+## Installation & Setup
+
+To run this application on your local machine, please follow these steps.
+
+**Prerequisites:**
+* Python 3.8+
+* `pip` and `venv`
+
+**1. Clone the Repository**
+```bash
+# If you haven't already, clone your project repository
+git clone [https://github.com/your-username/transportation-problem-solver.git](https://github.com/your-username/transportation-problem-solver.git)
+cd transportation-problem-solver
+```
+
+**2. Create and Activate a Virtual Environment**
+It's highly recommended to use a virtual environment to manage project dependencies.
+
+```bash
+# Create the environment
+python -m venv venv
+
+# Activate it
+# On Windows:
+# .\venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
+```
+
+**3. Install Dependencies**
+Install all required libraries from the `requirements.txt` file.
+
+```bash
+pip install -r requirements.txt
+```
+
+## How to Run the Application
+
+With the setup complete, running the web application is simple:
+
+1. Open your terminal in the project's root directory.
+2. Run the following command:
+   ```bash
+   streamlit run app.py
+   ```
+3. The application will automatically open in a new tab in your default web browser.
 
 ## Usage
 
-The solver is designed for flexibility and ease of use. You can run it as a Python script with GUI-based inputs or configure it for command-line usage if desired.
+Once the application is running in your browser:
 
-### Inputs
+1. Select an **Initial Solution Method** from the options in the sidebar (`Minimum Cost` or `Northwest Corner`).
 
-The program expects three main inputs, which are entered interactively via a graphical user interface (GUI):
+2. Enter Your Problem Data in the "Enter Data Manually" section. The app loads with a default example that you can solve immediately or edit.
 
-1. **Cost Matrix**:
-   - The transportation costs between each source and destination.
-   - Input format: Each row separated by a comma (`,`), and values in a row separated by spaces.  
-     For example, a `2x3` cost matrix would look like:  
-     ```
-     20 15 10, 12 8 16
-     ```
+3. Click the "Solve Problem" button.
 
-2. **Demand Vector**:
-   - The demand requirement of each destination.
-   - Input format: Space-separated values.  
-     For example:  
-     ```
-     30 40 40
-     ```
+4. View the Results: The optimal cost and final allocation matrix will be displayed. You can also click on the **"View Simplex Optimization Steps"** expander to see the initial solution and how the allocation changed with each iteration.
 
-3. **Supply Vector**:
-   - The supply capacity of each source.
-   - Input format: Space-separated values.  
-     For example:  
-     ```
-     50 60
-     ```
-
-4. **Initialization Method**:
-   - Choose between **Minimum Cost Rule** or **Northwest Rule** via a selection prompt.
-
-5. **Output Format**:
-   - Choose to save iteration tables in `.txt` or `.xlsx` format.
-
----
-
-### Outputs
-
-The program provides the following outputs:
-
-1. **Optimal Solution**:
-   - The transportation plan with minimized cost.
-
-2. **Cost Summary**:
-   - Displays the total transportation cost.
-
-3. **Iteration Tables**:
-   - Logs of the intermediate steps during the solution process.
-   - Saved in `.txt` or `.xlsx` format, based on user preference.
-   - Example file names:
-     - `MC_costs.txt`
-     - `MC_solutions.xlsx`
-     - `Northwest_rule.txt`
-
-4. **Console Outputs**:
-   - If the GUI is disabled or used in debug mode, results and iterations are also printed to the console.
-
----
