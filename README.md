@@ -1,8 +1,10 @@
 # Transportation Problem Solver
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-app-name.streamlit.app)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://transportation-problem-solver.streamlit.app/)
 
 [![License: BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](https://opensource.org/licenses/BSD-2-Clause)
+
+[Access the live application here.](https://transportation-problem-solver.streamlit.app/)
 
 An interactive web application built with Python and Streamlit to solve the classic **Transportation Problem**. This tool finds the minimum cost for shipping goods from a set of sources to a set of destinations.
 
